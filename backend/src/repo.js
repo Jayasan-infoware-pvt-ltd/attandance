@@ -1,6 +1,6 @@
-const { query } = require('./db');
+const { supabaseAdmin } = require('./supabase');
 
-function mapEmployeeRow(row) {
+function mapProfile(row) {
   return {
     id: row.id,
     name: row.name,
@@ -10,7 +10,7 @@ function mapEmployeeRow(row) {
   };
 }
 
-function mapAttendanceRow(row) {
+function mapAttendance(row) {
   if (!row) return null;
 
   return {
@@ -20,128 +20,134 @@ function mapAttendanceRow(row) {
     checkInAt: row.check_in_at,
     checkOutAt: row.check_out_at,
     status: row.status,
-    firstDistanceMeters: row.first_distance_meters == null ? null : Number(row.first_distance_meters)
+    firstDistanceMeters: row.first_distance_meters
   };
 }
 
-function mapLocationRow(row) {
+function mapLive(row) {
   return {
     employeeId: row.employee_id,
-    latitude: Number(row.latitude),
-    longitude: Number(row.longitude),
-    speedKph: Number(row.speed_kph),
+    latitude: row.latitude,
+    longitude: row.longitude,
+    speedKph: row.speed_kph,
     updatedAt: row.updated_at
   };
 }
 
-async function findEmployeeByEmail(email) {
-  const result = await query('SELECT * FROM employees WHERE email = $1 LIMIT 1', [email]);
-  return result.rows[0] || null;
+async function profileById(id) {
+  const { data, error } = await supabaseAdmin
+    .from('employee_profiles')
+    .select('id, name, email, role, shift_start')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapProfile(data) : null;
 }
 
-async function findEmployeeById(id) {
-  const result = await query('SELECT * FROM employees WHERE id = $1 LIMIT 1', [id]);
-  return result.rows[0] ? mapEmployeeRow(result.rows[0]) : null;
+async function profiles() {
+  const { data, error } = await supabaseAdmin
+    .from('employee_profiles')
+    .select('id, name, email, role, shift_start')
+    .order('name', { ascending: true });
+
+  if (error) throw error;
+  return (data || []).map(mapProfile);
 }
 
-async function listEmployees() {
-  const result = await query(
-    'SELECT id, name, email, role, shift_start FROM employees ORDER BY role DESC, name ASC'
-  );
-  return result.rows.map(mapEmployeeRow);
+async function attendanceByDay(employeeId, day) {
+  const { data, error } = await supabaseAdmin
+    .from('attendance')
+    .select('id, employee_id, day, check_in_at, check_out_at, status, first_distance_meters')
+    .eq('employee_id', employeeId)
+    .eq('day', day)
+    .maybeSingle();
+
+  if (error) throw error;
+  return mapAttendance(data);
 }
 
-async function getAttendanceByDay(employeeId, day) {
-  const result = await query(
-    `SELECT id, employee_id, day, check_in_at, check_out_at, status, first_distance_meters
-     FROM attendance
-     WHERE employee_id = $1 AND day = $2
-     LIMIT 1`,
-    [employeeId, day]
-  );
+async function upsertCheckIn({ employeeId, day, checkInAt, status, firstDistanceMeters }) {
+  const payload = {
+    employee_id: employeeId,
+    day,
+    check_in_at: checkInAt,
+    status,
+    first_distance_meters: firstDistanceMeters
+  };
 
-  return mapAttendanceRow(result.rows[0]);
-}
+  const { data, error } = await supabaseAdmin
+    .from('attendance')
+    .upsert(payload, { onConflict: 'employee_id,day' })
+    .select('id, employee_id, day, check_in_at, check_out_at, status, first_distance_meters')
+    .single();
 
-async function createCheckIn({ employeeId, day, checkInAt, status, distanceMeters }) {
-  const result = await query(
-    `INSERT INTO attendance (employee_id, day, check_in_at, check_out_at, status, first_distance_meters)
-     VALUES ($1, $2, $3, NULL, $4, $5)
-     ON CONFLICT (employee_id, day)
-     DO UPDATE SET
-       check_in_at = EXCLUDED.check_in_at,
-       status = EXCLUDED.status,
-       first_distance_meters = EXCLUDED.first_distance_meters
-     RETURNING id, employee_id, day, check_in_at, check_out_at, status, first_distance_meters`,
-    [employeeId, day, checkInAt, status, distanceMeters]
-  );
-
-  return mapAttendanceRow(result.rows[0]);
+  if (error) throw error;
+  return mapAttendance(data);
 }
 
 async function updateCheckOut({ employeeId, day, checkOutAt }) {
-  const result = await query(
-    `UPDATE attendance
-     SET check_out_at = $3
-     WHERE employee_id = $1 AND day = $2
-     RETURNING id, employee_id, day, check_in_at, check_out_at, status, first_distance_meters`,
-    [employeeId, day, checkOutAt]
-  );
+  const { data, error } = await supabaseAdmin
+    .from('attendance')
+    .update({ check_out_at: checkOutAt })
+    .eq('employee_id', employeeId)
+    .eq('day', day)
+    .select('id, employee_id, day, check_in_at, check_out_at, status, first_distance_meters')
+    .maybeSingle();
 
-  return mapAttendanceRow(result.rows[0]);
+  if (error) throw error;
+  return mapAttendance(data);
 }
 
-async function getMonthAttendance(employeeId, month) {
-  const result = await query(
-    `SELECT day, status
-     FROM attendance
-     WHERE employee_id = $1
-       AND TO_CHAR(day, 'YYYY-MM') = $2
-     ORDER BY day ASC`,
-    [employeeId, month]
-  );
+async function monthAttendance(employeeId, fromDay, toDay) {
+  const { data, error } = await supabaseAdmin
+    .from('attendance')
+    .select('day, status')
+    .eq('employee_id', employeeId)
+    .gte('day', fromDay)
+    .lte('day', toDay)
+    .order('day', { ascending: true });
 
-  return result.rows.map((row) => ({
-    day: row.day,
-    status: row.status
-  }));
+  if (error) throw error;
+  return data || [];
 }
 
 async function upsertLiveLocation({ employeeId, latitude, longitude, speedKph }) {
-  const result = await query(
-    `INSERT INTO live_locations (employee_id, latitude, longitude, speed_kph, updated_at)
-     VALUES ($1, $2, $3, $4, NOW())
-     ON CONFLICT (employee_id)
-     DO UPDATE SET
-       latitude = EXCLUDED.latitude,
-       longitude = EXCLUDED.longitude,
-       speed_kph = EXCLUDED.speed_kph,
-       updated_at = NOW()
-     RETURNING employee_id, latitude, longitude, speed_kph, updated_at`,
-    [employeeId, latitude, longitude, speedKph]
-  );
+  const payload = {
+    employee_id: employeeId,
+    latitude,
+    longitude,
+    speed_kph: speedKph,
+    updated_at: new Date().toISOString()
+  };
 
-  return mapLocationRow(result.rows[0]);
+  const { data, error } = await supabaseAdmin
+    .from('live_locations')
+    .upsert(payload, { onConflict: 'employee_id' })
+    .select('employee_id, latitude, longitude, speed_kph, updated_at')
+    .single();
+
+  if (error) throw error;
+  return mapLive(data);
 }
 
-async function listLiveLocations() {
-  const result = await query(
-    `SELECT employee_id, latitude, longitude, speed_kph, updated_at
-     FROM live_locations
-     ORDER BY updated_at DESC`
-  );
+async function liveLocations() {
+  const { data, error } = await supabaseAdmin
+    .from('live_locations')
+    .select('employee_id, latitude, longitude, speed_kph, updated_at')
+    .order('updated_at', { ascending: false });
 
-  return result.rows.map(mapLocationRow);
+  if (error) throw error;
+  return (data || []).map(mapLive);
 }
 
 module.exports = {
-  findEmployeeByEmail,
-  findEmployeeById,
-  listEmployees,
-  getAttendanceByDay,
-  createCheckIn,
+  profileById,
+  profiles,
+  attendanceByDay,
+  upsertCheckIn,
   updateCheckOut,
-  getMonthAttendance,
+  monthAttendance,
   upsertLiveLocation,
-  listLiveLocations
+  liveLocations
 };

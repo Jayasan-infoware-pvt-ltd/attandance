@@ -1,4 +1,5 @@
-const { verifyAccessToken } = require('./auth');
+const { supabaseAdmin } = require('./supabase');
+const { profileById } = require('./repo');
 
 function parseBearerToken(value) {
   if (!value) return null;
@@ -7,28 +8,44 @@ function parseBearerToken(value) {
   return token;
 }
 
-function requireAuth(req, res, next) {
-  const token = parseBearerToken(req.headers.authorization);
+async function userFromToken(token) {
+  const { data, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !data.user) return null;
 
-  if (!token) {
-    return res.status(401).json({ message: 'Authorization token is required' });
-  }
+  const profile = await profileById(data.user.id);
+  if (!profile) return null;
 
+  return {
+    id: profile.id,
+    email: profile.email,
+    name: profile.name,
+    role: profile.role,
+    shiftStart: profile.shiftStart
+  };
+}
+
+async function requireAuth(req, res, next) {
   try {
-    req.user = verifyAccessToken(token);
+    const token = parseBearerToken(req.headers.authorization);
+    if (!token) {
+      return res.status(401).json({ message: 'Authorization token is required' });
+    }
+
+    const user = await userFromToken(token);
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid token or missing employee profile' });
+    }
+
+    req.user = user;
     return next();
   } catch (error) {
-    return res.status(401).json({ message: 'Invalid or expired token' });
+    return res.status(401).json({ message: 'Authentication failed' });
   }
 }
 
 function requireRole(roles) {
   return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({ message: 'Unauthorized' });
-    }
-
-    if (!roles.includes(req.user.role)) {
+    if (!req.user || !roles.includes(req.user.role)) {
       return res.status(403).json({ message: 'Forbidden for current role' });
     }
 
@@ -37,7 +54,8 @@ function requireRole(roles) {
 }
 
 module.exports = {
+  parseBearerToken,
+  userFromToken,
   requireAuth,
-  requireRole,
-  parseBearerToken
+  requireRole
 };

@@ -7,27 +7,41 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <header>
-      <h1>Employee Attendance Dashboard</h1>
-      <p>Live location, attendance status and calendar view</p>
+    <div class="page-glow"></div>
+    <div class="page-glow second"></div>
+
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-dot"></div>
+        <div>
+          <h1>PulseTrack Attendance</h1>
+          <p>Real-time workforce intelligence</p>
+        </div>
+      </div>
     </header>
 
-    <main>
-      <section class="card" id="loginCard">
-        <h2>Admin Login</h2>
+    <main class="layout">
+      <section class="card card-login" id="loginCard">
+        <h2>Admin Access</h2>
+        <p class="muted">Use your Supabase admin credentials to continue.</p>
         <div class="row-inputs">
-          <input id="emailInput" type="email" value="admin@company.com" placeholder="Email" />
+          <input id="emailInput" type="email" value="admin@company.com" placeholder="Email address" />
           <input id="passwordInput" type="password" value="Password@123" placeholder="Password" />
-          <button id="loginBtn">Login</button>
+          <button id="loginBtn">Sign In</button>
         </div>
         <p id="loginStatus">Please login to continue</p>
       </section>
 
       <section id="dashboard" class="hidden">
-        <section class="card">
-          <h2>Employee</h2>
-          <select id="employeeSelect"></select>
-          <button id="refreshBtn">Refresh</button>
+        <section class="card toolbar">
+          <div>
+            <h2>Employee Overview</h2>
+            <p class="muted">Review individual attendance and movement timeline.</p>
+          </div>
+          <div class="toolbar-controls">
+            <select id="employeeSelect"></select>
+            <button id="refreshBtn">Refresh Data</button>
+          </div>
         </section>
 
         <section class="grid">
@@ -44,6 +58,7 @@
 
         <section class="card">
           <h2>Live Locations</h2>
+          <p class="muted">Auto-refreshes with live location updates.</p>
           <table>
             <thead>
               <tr>
