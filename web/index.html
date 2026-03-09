@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Attendance Admin Dashboard</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Employee Attendance Dashboard</h1>
+      <p>Live location, attendance status and calendar view</p>
+    </header>
+
+    <main>
+      <section class="card" id="loginCard">
+        <h2>Admin Login</h2>
+        <div class="row-inputs">
+          <input id="emailInput" type="email" value="admin@company.com" placeholder="Email" />
+          <input id="passwordInput" type="password" value="Password@123" placeholder="Password" />
+          <button id="loginBtn">Login</button>
+        </div>
+        <p id="loginStatus">Please login to continue</p>
+      </section>
+
+      <section id="dashboard" class="hidden">
+        <section class="card">
+          <h2>Employee</h2>
+          <select id="employeeSelect"></select>
+          <button id="refreshBtn">Refresh</button>
+        </section>
+
+        <section class="grid">
+          <article class="card">
+            <h2>Today</h2>
+            <pre id="todayStatus">Loading...</pre>
+          </article>
+
+          <article class="card">
+            <h2>Calendar (Current Month)</h2>
+            <div id="calendar"></div>
+          </article>
+        </section>
+
+        <section class="card">
+          <h2>Live Locations</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Employee ID</th>
+                <th>Latitude</th>
+                <th>Longitude</th>
+                <th>Speed (kph)</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody id="liveLocationsBody"></tbody>
+          </table>
+        </section>
+      </section>
+    </main>
+
+    <script src="http://localhost:4000/socket.io/socket.io.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
